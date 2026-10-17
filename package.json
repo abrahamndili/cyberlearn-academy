@@ -1,0 +1,13 @@
+{
+  "name": "cyberlearn-academy",
+  "private": true,
+  "version": "1.0.0",
+  "description": "CyberLearn Academy — lessons, payments, and certificates",
+  "scripts": {
+    "test": "echo \"No tests configured\""
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "pdfkit": "^0.15.1"
+  }
+}

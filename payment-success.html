@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payment Success | CyberLearn Academy</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html"><span class="shield">⬡</span> CyberLearn <b>Academy</b></a>
+  </header>
+
+  <main class="success-page">
+    <section class="success-panel">
+      <div class="eyebrow success-eyebrow">PAYMENT CONFIRMED</div>
+      <h1>Thanks for enrolling in the full academy bundle.</h1>
+      <p id="paymentSummary">Your payment has been received successfully.</p>
+
+      <div class="success-card">
+        <div><strong>Bundle:</strong> All lessons + certificate</div>
+        <div><strong>Amount:</strong> <span id="amountValue">$25</span></div>
+        <div><strong>Provider:</strong> <span id="providerValue">Demo</span></div>
+        <div><strong>Student:</strong> <span id="studentName">Student</span></div>
+      </div>
+
+      <div class="success-actions">
+        <button id="downloadCertificate" class="btn primary">Download certificate</button>
+        <a class="btn secondary" href="index.html">Back to courses</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const amount = params.get('amount') || '25';
+    const provider = params.get('provider') || 'Demo';
+    const student = params.get('name') || 'Student';
+    const email = params.get('email') || 'student@example.com';
+    const isDemo = params.get('demo') === '1';
+
+    document.getElementById('amountValue').textContent = `$${Number(amount)}`;
+    document.getElementById('providerValue').textContent = provider;
+    document.getElementById('studentName').textContent = student;
+    document.getElementById('paymentSummary').textContent = isDemo
+      ? 'Demo payment accepted. Your certificate is ready to download.'
+      : `Payment confirmed via ${provider}. A receipt has been recorded and the certificate is ready.`;
+
+    document.getElementById('downloadCertificate').addEventListener('click', () => {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+
+      doc.setFillColor(8, 13, 18);
+      doc.rect(0, 0, 595, 842, 'F');
+      doc.setTextColor(237, 245, 247);
+      doc.setFontSize(26);
+      doc.text('CyberLearn Academy', 297, 90, { align: 'center' });
+      doc.setFontSize(18);
+      doc.text('CERTIFICATE OF COMPLETION', 297, 150, { align: 'center' });
+      doc.setDrawColor(101, 240, 193);
+      doc.line(180, 175, 415, 175);
+      doc.setFontSize(30);
+      doc.text(student, 297, 285, { align: 'center' });
+      doc.setFontSize(16);
+      doc.text('has successfully completed the full Academy bundle', 297, 330, { align: 'center' });
+      doc.text(`Paid: $${Number(amount)} via ${provider}`, 297, 390, { align: 'center' });
+      doc.text(`Email: ${email}`, 297, 425, { align: 'center' });
+      doc.text('Issued by CyberLearn Academy', 297, 700, { align: 'center' });
+
+      const safeName = (student || 'CyberLearn').replace(/[^a-z0-9]/gi, '-').toLowerCase();
+      doc.save(`${safeName}-certificate.pdf`);
+    });
+  </script>
+</body>
+</html>

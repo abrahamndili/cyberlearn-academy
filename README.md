@@ -1,18 +1,39 @@
-# CyberLearn Academy — GitHub Pages files
+# CyberLearn Academy
 
-This is a **static website preview** designed to upload to GitHub and publish with GitHub Pages. It contains `index.html`, `style.css`, and `script.js`.
+This repository includes a static landing page plus a Vercel-ready payment flow for a full academy bundle.
 
-## Upload from your phone
-1. Download and extract `cyberlearn-academy-github.zip`.
-2. Open your GitHub repository (for example, `cyberlearn-academy`).
-3. Tap **Add file → Upload files**.
-4. Upload `index.html`, `style.css`, and `script.js` from the extracted folder. You may also upload this README.
-5. Commit the changes.
-6. In the repository, open **Settings → Pages**.
-7. Under **Build and deployment**, choose **Deploy from a branch**, select branch `main` and folder `/(root)`, then save.
-8. Wait a few minutes. Your site URL will usually be `https://YOUR-USERNAME.github.io/cyberlearn-academy/`.
+## What is included
+- A premium bundle pricing section in the landing page
+- A payment modal with provider selection for Flutterwave, Paystack, Pesapal, credit/debit card, and M-Pesa-style flow
+- A Vercel serverless payment endpoint at `/api/create-payment`
+- A webhook endpoint at `/api/payment-webhook`
+- A certificate success page that downloads a PDF certificate after payment
 
-## Important limitations
-This package is a static front-end website. It does not include user accounts, protected paid lessons, a database, admin backend, M-Pesa or card payment processing, or accredited certificates. Never put payment secrets, passwords, or API keys in these public files. A separate secure backend is needed for those features.
+## Pricing
+Default bundle price: $25 USD
 
-The current AppDeploy preview is separate from GitHub Pages; uploading this package to GitHub does not automatically sync changes back to that preview.
+## Deployment on Vercel
+1. Push this project to GitHub.
+2. Import the repo into Vercel.
+3. Add environment variables in the Vercel dashboard:
+   - `SITE_URL=https://your-domain.vercel.app`
+   - `FLW_SECRET_KEY` (optional, for Flutterwave)
+   - `FLW_PUBLIC_KEY` (optional)
+   - `PAYSTACK_SECRET_KEY` (optional)
+   - `PAYSTACK_PUBLIC_KEY` (optional)
+   - `PESAPAL_CONSUMER_KEY` (optional)
+   - `PESAPAL_CONSUMER_SECRET` (optional)
+   - `MESA_API_KEY` (optional, if using direct M-Pesa flow)
+4. Redeploy.
+
+## Demo mode
+If no live payment keys are configured, the app runs in demo mode. The payment button still redirects to the success page, where a certificate can be downloaded.
+
+## Production payment setup
+- Flutterwave: create a payment route, point redirect URL to `SITE_URL/payment-success.html`, and configure webhook on the Flutterwave dashboard.
+- Paystack: use the initialize transaction API and callback URL.
+- Pesapal / M-Pesa: implement the respective API in the same pattern as the existing serverless endpoints.
+
+## Notes
+- Secret keys must never be committed to the repository.
+- Use Vercel environment variables for all production credentials.
