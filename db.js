@@ -22,8 +22,23 @@ function init() {
       certificate_id TEXT UNIQUE,
       reference TEXT,
       file_name TEXT,
+      s3_key TEXT,
       issued_at TEXT
     )`);
+
+    // Ensure s3_key column exists for older DBs
+    db.get("PRAGMA table_info(certificates)", (err, row) => {
+      // noop - just ensure table exists; individual column checks below
+    });
+
+    // Add s3_key column if missing (safe in SQLite)
+    db.all("PRAGMA table_info(certificates)", (err, rows) => {
+      if (err) return;
+      const cols = rows.map(r => r.name);
+      if (!cols.includes('s3_key')) {
+        db.run(`ALTER TABLE certificates ADD COLUMN s3_key TEXT`);
+      }
+    });
   });
 }
 
@@ -57,10 +72,10 @@ function markPurchasePaid(reference, paystackData) {
   });
 }
 
-function createCertificateRecord({ certificateId, reference, fileName }) {
+function createCertificateRecord({ certificateId, reference, fileName, s3Key }) {
   return new Promise((resolve, reject) => {
-    const stmt = db.prepare(`INSERT INTO certificates (certificate_id, reference, file_name, issued_at) VALUES (?, ?, ?, datetime('now'))`);
-    stmt.run(certificateId, reference, fileName, function (err) {
+    const stmt = db.prepare(`INSERT INTO certificates (certificate_id, reference, file_name, s3_key, issued_at) VALUES (?, ?, ?, ?, datetime('now'))`);
+    stmt.run(certificateId, reference, fileName || null, s3Key || null, function (err) {
       stmt.finalize();
       if (err) return reject(err);
       resolve(this.lastID);
@@ -84,5 +99,6 @@ module.exports = {
   markPurchasePaid,
   createCertificateRecord,
   getCertificateById,
-  dbPath: DB_PATH
+  dbPath: DB_PATH,
+  db
 };

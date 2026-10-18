@@ -5,8 +5,11 @@ const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
 const puppeteer = require('puppeteer');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
+
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const db = require('./db');
 
@@ -18,6 +21,21 @@ const SITE_URL = process.env.SITE_URL || 'http://localhost:3000';
 // Admin credentials (basic auth)
 const ADMIN_USER = process.env.ADMIN_USER || 'admin';
 const ADMIN_PASS = process.env.ADMIN_PASS || 'password';
+
+// AWS / S3 configuration
+const AWS_REGION = process.env.AWS_REGION;
+const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
+const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+const S3_BUCKET = process.env.S3_BUCKET;
+const SIGNED_URL_EXPIRES = Number(process.env.SIGNED_URL_EXPIRES || 900);
+
+let s3Client = null;
+if (AWS_REGION && AWS_ACCESS_KEY_ID && AWS_SECRET_ACCESS_KEY && S3_BUCKET) {
+  s3Client = new S3Client({ region: AWS_REGION, credentials: { accessKeyId: AWS_ACCESS_KEY_ID, secretAccessKey: AWS_SECRET_ACCESS_KEY } });
+  console.log('S3 client configured for bucket:', S3_BUCKET);
+} else {
+  console.log('S3 not configured - falling back to local certificate storage');
+}
 
 // Ensure DB exists and tables are created
 db.init();
@@ -70,6 +88,20 @@ function makeCertificateHtml({ certificateId, email, lessonId }) {
   `;
 }
 
+async function uploadToS3(key, buffer) {
+  if (!s3Client) throw new Error('S3 not configured');
+  const cmd = new PutObjectCommand({ Bucket: S3_BUCKET, Key: key, Body: buffer, ContentType: 'application/pdf' });
+  await s3Client.send(cmd);
+  return key;
+}
+
+async function signedUrlForKey(key) {
+  if (!s3Client) return null;
+  const cmd = new GetObjectCommand({ Bucket: S3_BUCKET, Key: key });
+  const url = await getSignedUrl(s3Client, cmd, { expiresIn: SIGNED_URL_EXPIRES });
+  return url;
+}
+
 async function generateCertificateForReference(reference) {
   const purchase = await db.getPurchaseByReference(reference);
   if (!purchase) throw new Error('Purchase record not found');
@@ -83,14 +115,22 @@ async function generateCertificateForReference(reference) {
   const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
   await browser.close();
 
-  const certDir = path.join(__dirname, 'certificates');
-  if (!fs.existsSync(certDir)) fs.mkdirSync(certDir);
-
   const fileName = `certificate-${certificateId}.pdf`;
-  const filePath = path.join(certDir, fileName);
-  fs.writeFileSync(filePath, pdfBuffer);
+  let s3Key = null;
 
-  await db.createCertificateRecord({ certificateId, reference, fileName });
+  if (s3Client) {
+    s3Key = `certificates/${fileName}`;
+    await uploadToS3(s3Key, pdfBuffer);
+    // create record with s3 key
+    await db.createCertificateRecord({ certificateId, reference, fileName: null, s3Key });
+  } else {
+    // fallback - save locally
+    const certDir = path.join(__dirname, 'certificates');
+    if (!fs.existsSync(certDir)) fs.mkdirSync(certDir);
+    const filePath = path.join(certDir, fileName);
+    fs.writeFileSync(filePath, pdfBuffer);
+    await db.createCertificateRecord({ certificateId, reference, fileName, s3Key: null });
+  }
 
   // send email (best-effort)
   try {
@@ -104,18 +144,19 @@ async function generateCertificateForReference(reference) {
       }
     });
 
+    let attachment = { filename: fileName, content: pdfBuffer };
     await transporter.sendMail({
       from: process.env.EMAIL_FROM || 'no-reply@cyberlearn.academy',
       to: purchase.email,
       subject: `Your CyberLearn certificate for ${purchase.lessonId}`,
       text: `Congratulations! Your certificate for ${purchase.lessonId} has been issued.`,
-      attachments: [{ filename: fileName, content: pdfBuffer }]
+      attachments: [attachment]
     });
   } catch (err) {
     console.error('Email send failed:', err.message || err);
   }
 
-  return { certificateId, fileName, filePath };
+  return { certificateId, fileName, s3Key };
 }
 
 // --- Existing endpoints (initiate, verify, webhook) ---
@@ -212,7 +253,13 @@ app.get('/api/verify/:reference', async (req, res) => {
       // generate certificate if not present
       try {
         const cert = await generateCertificateForReference(reference);
-        return res.json({ ok: true, message: 'Payment verified.', certificateUrl: `${SITE_URL}/certificates/${cert.fileName}`, certificateId: cert.certificateId });
+        let downloadUrl = null;
+        if (cert.s3Key && s3Client) {
+          downloadUrl = await signedUrlForKey(cert.s3Key);
+        } else {
+          downloadUrl = `${SITE_URL}/certificates/${cert.fileName}`;
+        }
+        return res.json({ ok: true, message: 'Payment verified.', certificateUrl: downloadUrl, certificateId: cert.certificateId });
       } catch (genErr) {
         console.error('Certificate generation error:', genErr);
         return res.json({ ok: true, message: 'Payment verified. Certificate generation pending.' });
@@ -266,7 +313,7 @@ app.get('/api/admin/purchases', basicAuth, async (req, res) => {
   const status = req.query.status || '';
 
   // Build SQL
-  let base = `SELECT p.reference, p.lessonId, p.email, p.amount, p.status, p.created_at, c.file_name FROM purchases p LEFT JOIN certificates c ON c.reference = p.reference`;
+  let base = `SELECT p.reference, p.lessonId, p.email, p.amount, p.status, p.created_at, c.file_name, c.s3_key FROM purchases p LEFT JOIN certificates c ON c.reference = p.reference`;
   const params = [];
   const filters = [];
   if (q) {
@@ -282,24 +329,41 @@ app.get('/api/admin/purchases', basicAuth, async (req, res) => {
   params.push(pageSize, (page-1)*pageSize);
 
   try {
-    db.db.serialize(() => {
+    const rows = await new Promise((resolve, reject) => {
       db.db.all(base, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        // get total count for info
-        let countSql = 'SELECT COUNT(*) as cnt FROM purchases p';
-        const countParams = [];
-        if (q || status) {
-          const countFilters = [];
-          if (q) countFilters.push(`(p.email LIKE ? OR p.lessonId LIKE ? OR p.reference LIKE ?)`), countParams.push(`%${q}%`, `%${q}%`, `%${q}%`);
-          if (status) countFilters.push(`p.status = ?`), countParams.push(status);
-          countSql += ' WHERE ' + countFilters.join(' AND ');
-        }
-        db.db.get(countSql, countParams, (err2, cntRow) => {
-          if (err2) return res.status(500).json({ error: err2.message });
-          res.json({ rows, total: cntRow.cnt });
-        });
+        if (err) return reject(err);
+        resolve(rows);
       });
     });
+
+    // Generate signed URLs for rows if S3 is configured
+    const rowsWithUrls = await Promise.all(rows.map(async (r) => {
+      if (r.s3_key && s3Client) {
+        try {
+          r.signedUrl = await signedUrlForKey(r.s3_key);
+        } catch (err) {
+          r.signedUrl = null;
+        }
+      } else if (r.file_name) {
+        r.signedUrl = `${SITE_URL}/certificates/${r.file_name}`;
+      } else {
+        r.signedUrl = null;
+      }
+      return r;
+    }));
+
+    // get total count for info
+    let countSql = 'SELECT COUNT(*) as cnt FROM purchases p';
+    const countParams = [];
+    if (q || status) {
+      const countFilters = [];
+      if (q) countFilters.push(`(p.email LIKE ? OR p.lessonId LIKE ? OR p.reference LIKE ?)`), countParams.push(`%${q}%`, `%${q}%`, `%${q}%`);
+      if (status) countFilters.push(`p.status = ?`), countParams.push(status);
+      countSql += ' WHERE ' + countFilters.join(' AND ');
+    }
+    const cntRow = await new Promise((resolve, reject) => db.db.get(countSql, countParams, (err, row) => err ? reject(err) : resolve(row)));
+
+    res.json({ rows: rowsWithUrls, total: cntRow.cnt });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -311,7 +375,10 @@ app.post('/api/admin/reissue', basicAuth, async (req, res) => {
 
   try {
     const cert = await generateCertificateForReference(reference);
-    res.json({ ok: true, certificateId: cert.certificateId, url: `${SITE_URL}/certificates/${cert.fileName}` });
+    let downloadUrl = null;
+    if (cert.s3Key && s3Client) downloadUrl = await signedUrlForKey(cert.s3Key);
+    else downloadUrl = `${SITE_URL}/certificates/${cert.fileName}`;
+    res.json({ ok: true, certificateId: cert.certificateId, url: downloadUrl });
   } catch (err) {
     console.error('Reissue error', err);
     res.status(500).json({ ok: false, error: err.message || 'Failed to reissue' });
@@ -326,7 +393,9 @@ app.get('/api/certificate/:certificateId', async (req, res) => {
   try {
     const row = await db.getCertificateById(certificateId);
     if (!row) return res.status(404).json({ ok: false, error: 'Certificate not found' });
-    const url = `${SITE_URL}/certificates/${row.file_name}`;
+    let url = null;
+    if (row.s3_key && s3Client) url = await signedUrlForKey(row.s3_key);
+    else url = `${SITE_URL}/certificates/${row.file_name}`;
     res.json({ ok: true, certificate: { certificateId: row.certificate_id, lessonId: row.lessonId, email: row.email, file: url, issued_at: row.issued_at } });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
