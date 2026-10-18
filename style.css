@@ -1,138 +1,71 @@
-const courses = [
-  { title: 'Cybersecurity Fundamentals', level: 'Beginner', icon: '🛡️', desc: 'CIA triad, threats, vulnerabilities, risk and security controls.', time: '2–3 hours', lessonId: 'cyber-fundamentals', price: 5000 },
-  { title: 'Linux & Networking', level: 'Beginner', icon: '⌘', desc: 'Terminal basics, IP addresses, DNS, ports and network protocols.', time: '3–4 hours', lessonId: 'linux-networking', price: 5000 },
-  { title: 'Python for Security', level: 'Beginner', icon: '🐍', desc: 'Learn variables, files, scripts and small defensive tools.', time: '3–5 hours', lessonId: 'python-security', price: 5000 },
-  { title: 'Web & Application Security', level: 'Intermediate', icon: '⌁', desc: 'Understand authentication, input validation, XSS and SQL injection prevention.', time: '4–5 hours', lessonId: 'web-security', price: 7000 },
-  { title: 'Digital Forensics', level: 'Intermediate', icon: '🔎', desc: 'Evidence handling, file metadata, timelines and investigation notes.', time: '3–4 hours', lessonId: 'digital-forensics', price: 7000 },
-  { title: 'Incident Response', level: 'Intermediate', icon: '🚨', desc: 'Prepare, detect, contain, eradicate, recover and document incidents.', time: '2–3 hours', lessonId: 'incident-response', price: 7000 },
-  { title: 'Cloud Security', level: 'Intermediate', icon: '☁️', desc: 'Identity, access control, secure storage and cloud configuration basics.', time: '3 hours', lessonId: 'cloud-security', price: 7000 },
-  { title: 'Threat Intelligence', level: 'Intermediate', icon: '◎', desc: 'Indicators of compromise, threat context and reliable reporting.', time: '2–3 hours', lessonId: 'threat-intelligence', price: 7000 },
-  { title: 'Security Operations (SOC)', level: 'Intermediate', icon: '▦', desc: 'Logs, alert triage, SIEM concepts and escalation workflows.', time: '4 hours', lessonId: 'soc', price: 8000 },
-  { title: 'Technical Writing', level: 'Beginner', icon: '✎', desc: 'Write clear lab reports, findings, recommendations and incident summaries.', time: '1–2 hours', lessonId: 'technical-writing', price: 5000 }
-];
-
-let activeLevel = 'All';
-const grid = document.querySelector('#courseGrid');
-
-function renderCourses() {
-  const q = document.querySelector('#search').value.toLowerCase();
-  const list = courses.filter(course => {
-    const matchesLevel = activeLevel === 'All' || course.level === activeLevel;
-    const haystack = `${course.title} ${course.desc}`.toLowerCase();
-    return matchesLevel && haystack.includes(q);
-  });
-
-  grid.innerHTML = list.map(course => `
-    <article class="course-card">
-      <div class="course-top">
-        <div class="course-icon">${course.icon}</div>
-        <span class="course-level">${course.level}</span>
-      </div>
-      <h3>${course.title}</h3>
-      <p>${course.desc}</p>
-      <div class="course-meta">
-        <span>${course.time}</span>
-        <strong>₦${(course.price / 100).toFixed(0)}</strong>
-      </div>
-      <button class="buy-lesson" data-lesson-id="${course.lessonId}" data-amount="${course.price}">Buy lesson</button>
-    </article>
-  `).join('');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=DM+Sans:wght@400;700&display=swap');
+:root{
+  --bg:#071216;
+  --panel:#0e262e;
+  --panel2:#0d1b22;
+  --text:#eaf6f8;
+  --muted:#98aeb5;
+  --mint:#62f0c1;
+  --cyan:#67d8eb;
+  --accent:linear-gradient(135deg,var(--mint),var(--cyan));
+  --line:rgba(255,255,255,0.04);
+  --glass: rgba(255,255,255,0.02);
 }
-
-document.querySelector('#search').addEventListener('input', renderCourses);
-document.querySelectorAll('.filter').forEach(button => {
-  button.addEventListener('click', () => {
-    document.querySelectorAll('.filter').forEach(item => item.classList.remove('active'));
-    button.classList.add('active');
-    activeLevel = button.dataset.level;
-    renderCourses();
-  });
-});
-
-async function startPayment(lessonId, amount) {
-  const email = prompt('Enter your email to receive the lesson certificate after payment:');
-  if (!email) return;
-
-  try {
-    const response = await fetch('/api/initiate-payment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lessonId, email, amount })
-    });
-
-    const data = await response.json();
-    if (!response.ok || !data.authorization_url) {
-      throw new Error(data.error || 'Payment could not be initialized.');
-    }
-
-    window.location.href = data.authorization_url;
-  } catch (error) {
-    alert(error.message || 'Payment failed.');
-  }
-}
-
-document.addEventListener('click', event => {
-  const target = event.target.closest('.buy-lesson');
-  if (!target) return;
-
-  const lessonId = target.dataset.lessonId;
-  const amount = Number(target.dataset.amount || 0);
-  startPayment(lessonId, amount);
-});
-
-const quiz = [
-  { q: 'What does the CIA triad stand for?', a: ['Confidentiality, Integrity, Availability', 'Control, Inspection, Access', 'Cybersecurity, Internet, Applications'], correct: 0, why: 'The CIA triad is a core model for information security.' },
-  { q: 'Which command commonly shows the current directory in Linux?', a: ['whereami', 'pwd', 'showdir'], correct: 1, why: 'pwd prints the current working directory.' },
-  { q: 'What should you do before testing a system?', a: ['Get explicit authorization', 'Hide your identity', 'Disable its logs'], correct: 0, why: 'Only test systems you own or have clear permission to assess.' },
-  { q: 'What is phishing?', a: ['A way to compress files', 'A social-engineering attempt to trick people', 'A network cable type'], correct: 1, why: 'Phishing uses deceptive messages or sites to steal information.' },
-  { q: 'What is the safest way to store passwords?', a: ['Plain text in a file', 'Reuse one easy password', 'Use a password manager and unique passwords'], correct: 2, why: 'A password manager helps create and store unique passwords safely.' }
-];
-
-let qi = 0, score = 0, chosen = false;
-
-function showQuestion() {
-  chosen = false;
-  document.querySelector('#feedback').textContent = '';
-  document.querySelector('#next').disabled = true;
-  const item = quiz[qi];
-  document.querySelector('#quizCount').textContent = `QUESTION ${qi + 1} OF ${quiz.length}`;
-  document.querySelector('#question').textContent = item.q;
-  const answers = document.querySelector('#answers');
-  answers.innerHTML = '';
-  item.a.forEach((answer, index) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'answer';
-    btn.textContent = answer;
-    btn.addEventListener('click', () => {
-      if (chosen) return;
-      chosen = true;
-      const isCorrect = index === item.correct;
-      document.querySelectorAll('.answer').forEach(x => x.disabled = true);
-      btn.classList.add(isCorrect ? 'correct' : 'wrong');
-      document.querySelector('#feedback').textContent = isCorrect ? `Correct — ${item.why}` : `Not quite. ${item.why}`;
-      if (isCorrect) score++;
-      document.querySelector('#next').disabled = false;
-    });
-    answers.appendChild(btn);
-  });
-}
-
-document.querySelector('#next').addEventListener('click', () => {
-  if (!chosen) return;
-  if (qi < quiz.length - 1) {
-    qi++;
-    showQuestion();
-  } else {
-    document.querySelector('#quizCount').textContent = 'QUIZ COMPLETE';
-    document.querySelector('#question').textContent = `You scored ${score} out of ${quiz.length}.`;
-    document.querySelector('#answers').innerHTML = '';
-    document.querySelector('#feedback').textContent = 'Nice work. Review the lessons and keep learning.';
-    document.querySelector('#next').disabled = true;
-  }
-});
-
-document.querySelector('#year').textContent = new Date().getFullYear();
-renderCourses();
-showQuestion();
-
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,'DM Sans',sans-serif;line-height:1.6}
+.wrap{width:min(1200px,calc(100% - 48px));margin:0 auto}
+.topbar{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,rgba(7,18,22,0.88),rgba(7,18,22,0.6));backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.topbar .wrap{display:flex;align-items:center;justify-content:space-between;padding:14px 0}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700}
+.brand .shield{color:var(--mint);font-size:1.15rem}
+.nav{display:flex;gap:18px}
+.nav a{color:var(--muted);text-decoration:none;padding:8px;border-radius:8px}
+.nav a:hover{color:var(--text);background:var(--glass)}
+.hero{padding:56px 0}
+.hero-grid{display:grid;grid-template-columns:1fr 420px;gap:34px;align-items:center}
+.hero-content .eyebrow{color:var(--mint);font-weight:700;letter-spacing:0.14em;font-size:0.82rem}
+h1{font-size:clamp(2rem,4.5vw,3.6rem);margin:8px 0;line-height:1.02}
+h1 span{background:linear-gradient(90deg,#62f0c1,#67d8eb);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{color:var(--muted);max-width:620px}
+.hero-actions{display:flex;gap:12px;margin-top:18px}
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:10px 16px;font-weight:700;cursor:pointer;border:1px solid transparent}
+.btn.primary{background:var(--accent);color:#05221c}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+.hero-note{margin-top:14px;color:var(--muted);display:flex;gap:10px;align-items:center}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--mint);box-shadow:0 0 18px rgba(98,240,193,0.9)}
+.hero-visual{min-height:260px;display:grid;place-items:center}
+.stats{padding:18px 0}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.stat{background:linear-gradient(180deg,rgba(12,28,32,0.8),rgba(8,18,22,0.8));padding:18px;border-radius:12px;border:1px solid var(--line);text-align:center}
+.stat strong{display:block;font-size:1.6rem}
+.section{padding:42px 0}
+.section-head{display:flex;justify-content:space-between;align-items:end;gap:18px;margin-bottom:12px}
+#search{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text)}
+.filters{display:flex;gap:10px;margin:8px 0 18px}
+.filter{padding:8px 12px;border-radius:999px;background:transparent;border:1px solid var(--line);color:var(--muted);cursor:pointer}
+.filter.active{background:rgba(98,240,193,0.08);border-color:rgba(98,240,193,0.28);color:var(--text)}
+.course-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+.course-card{background:linear-gradient(180deg,var(--panel),var(--panel2));border-radius:14px;padding:18px;border:1px solid var(--line);box-shadow:0 12px 30px rgba(0,0,0,0.35);display:flex;flex-direction:column;gap:10px;transition:transform .18s ease,box-shadow .18s ease}
+.course-card:hover{transform:translateY(-8px);box-shadow:0 28px 60px rgba(0,0,0,0.48)}
+.course-top{display:flex;justify-content:space-between;align-items:center}
+.course-icon{width:52px;height:52px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(180deg,rgba(103,216,235,0.06),rgba(98,240,193,0.04));font-size:1.4rem}
+.course-level{padding:6px 10px;border-radius:999px;background:rgba(255,255,255,0.02);color:var(--muted);font-size:0.82rem}
+.course-card h3{margin:0;font-size:1.05rem}
+.course-card p{margin:0;color:var(--muted)}
+.course-meta{margin-top:auto;display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--muted)}
+.buy-lesson{margin-top:10px;border:none;padding:10px 12px;border-radius:10px;background:var(--accent);color:#05221c;font-weight:700;cursor:pointer}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.lab-card{background:linear-gradient(180deg,rgba(17,28,35,0.9),rgba(15,23,28,0.9));padding:18px;border-radius:12px;border:1px solid var(--line)}
+.quiz-card{background:linear-gradient(180deg,rgba(17,28,35,0.9),rgba(12,20,25,0.9));padding:18px;border-radius:12px;border:1px solid var(--line)}
+.quiz-count{color:var(--mint);font-weight:700;margin-bottom:10px}
+.answers{display:grid;gap:10px}
+.answer{padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,0.12);background:transparent;color:var(--text);cursor:pointer}
+.answer.correct{background:#083f2c}
+.answer.wrong{background:#3d1717}
+.roadmap{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:18px}
+.roadmap > div{background:linear-gradient(180deg,rgba(17,28,35,0.9),rgba(18,25,30,0.9));padding:18px;border-radius:12px;border:1px solid var(--line)}
+.cta{margin:28px 0;background:linear-gradient(180deg,rgba(10,20,26,0.9),rgba(8,16,22,0.9));padding:22px;border-radius:12px;border:1px solid var(--line)}
+.footer-inner{display:flex;gap:16px;align-items:center;justify-content:space-between;padding:18px 0}
+.muted{color:var(--muted)}
+@media (max-width:980px){.hero-grid{grid-template-columns:1fr}.hero-visual{display:none}.split{grid-template-columns:1fr}.roadmap{grid-template-columns:1fr}}
+@media (max-width:520px){.nav{display:none}.wrap{width:calc(100% - 32px)}h1{font-size:1.8rem}}
