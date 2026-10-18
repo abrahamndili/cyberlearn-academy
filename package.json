@@ -1,251 +1,32 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const crypto = require('crypto');
-const fetch = require('node-fetch');
-const { v4: uuidv4 } = require('uuid');
-const nodemailer = require('nodemailer');
-const puppeteer = require('puppeteer');
-const fs = require('fs');
-const path = require('path');
+# CyberLearn Academy
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-const SITE_URL = process.env.SITE_URL || 'http://localhost:3000';
+A basic cybersecurity learning landing page with per-lesson payment and certificate generation support.
 
-const purchases = {};
+## Setup
 
-app.use(express.json());
+1. Install dependencies:
+   npm install
+2. Copy `.env.example` to `.env` and fill in your Paystack and email credentials.
+3. Start the app:
+   npm start
+4. Visit http://localhost:3000
 
-function makeCertificateHtml({ certificateId, email, lessonId }) {
-  const issued = new Date().toLocaleDateString();
-  return `
-    <!doctype html>
-    <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; background: #081015; color: #edf7fb; text-align: center; padding: 40px; }
-          .frame { border: 10px solid #62f0c1; padding: 40px; border-radius: 20px; }
-          h1 { font-size: 32px; margin-bottom: 8px; }
-          h2 { margin: 18px 0 8px; }
-          p { font-size: 18px; color: #dbe9ee; }
-          .small { font-size: 12px; color: #a9bac4; margin-top: 22px; }
-        </style>
-      </head>
-      <body>
-        <div class="frame">
-          <h1>Certificate of Completion</h1>
-          <p>This certifies that</p>
-          <h2>${email}</h2>
-          <p>has successfully completed the lesson:</p>
-          <h3>${lessonId}</h3>
-          <p>Issued on ${issued}</p>
-          <div class="small">Certificate ID: ${certificateId}</div>
-        </div>
-      </body>
-    </html>
-  `;
-}
+## Paystack flow
 
-async function generateCertificate(reference) {
-  const purchase = purchases[reference];
-  if (!purchase || purchase.certificateIssued) return;
+- The frontend triggers `/api/initiate-payment`.
+- The server initializes a Paystack transaction.
+- After successful payment, the user is redirected to `/payment-callback`.
+- The server verifies the transaction and issues a certificate PDF which is emailed to the customer.
 
-  const certificateId = uuidv4();
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
+## New: SQLite persistence and certificate verification
 
-  const page = await browser.newPage();
-  await page.setContent(makeCertificateHtml({
-    certificateId,
-    email: purchase.email,
-    lessonId: purchase.lessonId
-  }), { waitUntil: 'networkidle0' });
+This update stores purchases and certificate records in a local SQLite database (`db.sqlite`) and adds a certificate verification page at `/verify`.
 
-  const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
-  await browser.close();
+- `/verify` provides a form where a user can enter a certificate ID to confirm authenticity.
+- `/api/certificate/:certificateId` returns certificate metadata and a download link if the certificate exists.
 
-  const certDir = path.join(__dirname, 'certificates');
-  if (!fs.existsSync(certDir)) fs.mkdirSync(certDir);
+Notes
 
-  const fileName = `certificate-${certificateId}.pdf`;
-  const filePath = path.join(certDir, fileName);
-  fs.writeFileSync(filePath, pdfBuffer);
-
-  purchase.certificateIssued = true;
-  purchase.certificateId = certificateId;
-  purchase.certificateUrl = `${SITE_URL}/certificates/${fileName}`;
-
-  const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_SMTP_HOST,
-    port: Number(process.env.EMAIL_SMTP_PORT || 587),
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_SMTP_USER,
-      pass: process.env.EMAIL_SMTP_PASS
-    }
-  });
-
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM || 'no-reply@cyberlearn.academy',
-    to: purchase.email,
-    subject: `Your CyberLearn certificate for ${purchase.lessonId}`,
-    text: `Congratulations! Your certificate for ${purchase.lessonId} has been issued.`,
-    attachments: [{ filename: fileName, content: pdfBuffer }]
-  });
-}
-
-app.get('/payment-callback', (req, res) => {
-  const reference = req.query.reference;
-  if (!reference) {
-    return res.status(400).send('Missing reference.');
-  }
-
-  res.send(`
-    <html>
-      <body style="font-family:Arial,sans-serif;background:#081015;color:#edf7fb;padding:40px;">
-        <h2>Payment status</h2>
-        <p>Processing your purchase...</p>
-        <script>
-          fetch('/api/verify/' + encodeURIComponent('${reference}'))
-            .then(r => r.json())
-            .then(data => {
-              if (data.ok) {
-                document.body.innerHTML = '<h2>Payment successful</h2><p>Your certificate is being emailed to you.</p><a href="/" style="color:#62f0c1;">Return to courses</a>';
-              } else {
-                document.body.innerHTML = '<h2>Payment not completed</h2><p>Please try again or contact support.</p>';
-              }
-            })
-            .catch(() => {
-              document.body.innerHTML = '<h2>Could not verify payment</h2><p>Please check your email or contact support.</p>';
-            });
-        </script>
-      </body>
-    </html>
-  `);
-});
-
-app.post('/api/initiate-payment', async (req, res) => {
-  const { lessonId, email, amount } = req.body || {};
-
-  if (!lessonId || !email || !amount) {
-    return res.status(400).json({ error: 'Missing lessonId, email, or amount.' });
-  }
-
-  try {
-    const response = await fetch('https://api.paystack.co/transaction/initialize', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        email,
-        amount: Number(amount),
-        callback_url: `${SITE_URL}/payment-callback`,
-        metadata: { lessonId }
-      })
-    });
-
-    const json = await response.json();
-    if (!json.status) {
-      return res.status(400).json({ error: json.message || 'Paystack initialization failed.' });
-    }
-
-    const reference = json.data.reference;
-    purchases[reference] = {
-      lessonId,
-      email,
-      amount: Number(amount),
-      status: 'pending',
-      reference
-    };
-
-    res.json({ authorization_url: json.data.authorization_url, reference });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to initialize payment.', details: error.message });
-  }
-});
-
-app.get('/api/verify/:reference', async (req, res) => {
-  const { reference } = req.params;
-
-  if (!reference) {
-    return res.status(400).json({ ok: false, error: 'Missing reference.' });
-  }
-
-  try {
-    const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` }
-    });
-
-    const json = await response.json();
-    if (!json.status) {
-      return res.status(400).json({ ok: false, error: json.message || 'Verification failed.' });
-    }
-
-    const data = json.data;
-    if (data.status === 'success') {
-      const record = purchases[reference] || { reference };
-      record.status = 'paid';
-      record.paystack = data;
-      purchases[reference] = record;
-
-      if (!record.certificateIssued) {
-        await generateCertificate(reference);
-      }
-
-      return res.json({ ok: true, message: 'Payment verified.', certificateUrl: record.certificateUrl || null });
-    }
-
-    return res.json({ ok: false, message: 'Payment not successful.', status: data.status });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: 'Verification failed.', details: error.message });
-  }
-});
-
-app.post('/api/paystack-webhook', bodyParser.raw({ type: '*/*' }), async (req, res) => {
-  const signature = req.headers['x-paystack-signature'];
-  const hash = crypto.createHmac('sha512', PAYSTACK_SECRET_KEY).update(req.body).digest('hex');
-
-  if (signature !== hash) {
-    return res.status(400).send('Invalid signature');
-  }
-
-  try {
-    const event = JSON.parse(req.body.toString());
-    const eventType = event.event;
-    const data = event.data || {};
-
-    if (eventType === 'charge.success' || eventType === 'transaction.success') {
-      const reference = data.reference;
-      const record = purchases[reference] || { reference, email: data.customer?.email || '', lessonId: data.metadata?.lessonId, amount: data.amount };
-      record.status = 'paid';
-      record.paystack = data;
-      purchases[reference] = record;
-
-      if (!record.certificateIssued) {
-        await generateCertificate(reference);
-      }
-    }
-  } catch (error) {
-    console.error('Webhook processing failed:', error);
-    return res.status(500).send('Webhook error');
-  }
-
-  res.sendStatus(200);
-});
-
-app.use('/certificates', express.static(path.join(__dirname, 'certificates')));
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.listen(PORT, () => {
-  console.log(`CyberLearn Academy server running on http://localhost:${PORT}`);
-});
+- The example uses a local `certificates/` folder for PDF storage and an SQLite database. For production, move certificate storage to S3 (or similar) and use a managed database.
+- Keep your `.env` file private and never commit secrets.
 

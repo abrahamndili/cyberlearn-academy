@@ -1,462 +1,264 @@
-:root {
-  --bg: #081015;
-  --panel: #101b23;
-  --panel-strong: #162730;
-  --text: #edf7fb;
-  --muted: #a9bac4;
-  --mint: #62f0c1;
-  --cyan: #67d8eb;
-  --line: rgba(255,255,255,0.08);
-  --shadow: 0 20px 45px rgba(0,0,0,0.24);
+const express = require('express');
+const bodyParser = require('body-parser');
+const crypto = require('crypto');
+const fetch = require('node-fetch');
+const { v4: uuidv4 } = require('uuid');
+const nodemailer = require('nodemailer');
+const puppeteer = require('puppeteer');
+const fs = require('fs');
+const path = require('path');
+
+const db = require('./db');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+const SITE_URL = process.env.SITE_URL || 'http://localhost:3000';
+
+// Ensure DB exists and tables are created
+db.init();
+
+app.use(express.json());
+
+function makeCertificateHtml({ certificateId, email, lessonId }) {
+  const issued = new Date().toLocaleDateString();
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <style>
+          body { font-family: Arial, sans-serif; background: #081015; color: #edf7fb; text-align: center; padding: 40px; }
+          .frame { border: 10px solid #62f0c1; padding: 40px; border-radius: 20px; }
+          h1 { font-size: 32px; margin-bottom: 8px; }
+          h2 { margin: 18px 0 8px; }
+          p { font-size: 18px; color: #dbe9ee; }
+          .small { font-size: 12px; color: #a9bac4; margin-top: 22px; }
+        </style>
+      </head>
+      <body>
+        <div class="frame">
+          <h1>Certificate of Completion</h1>
+          <p>This certifies that</p>
+          <h2>${email}</h2>
+          <p>has successfully completed the lesson:</p>
+          <h3>${lessonId}</h3>
+          <p>Issued on ${issued}</p>
+          <div class="small">Certificate ID: ${certificateId}</div>
+        </div>
+      </body>
+    </html>
+  `;
 }
 
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'DM Sans', Arial, sans-serif;
-  line-height: 1.6;
+async function generateCertificate(reference) {
+  const purchase = await db.getPurchaseByReference(reference);
+  if (!purchase) throw new Error('Purchase record not found');
+  if (purchase.certificate_issued) return; // legacy check
+
+  const certificateId = uuidv4();
+  const html = makeCertificateHtml({ certificateId, email: purchase.email, lessonId: purchase.lessonId });
+
+  const browser = await puppeteer.launch({ args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: 'networkidle0' });
+  const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+  await browser.close();
+
+  const certDir = path.join(__dirname, 'certificates');
+  if (!fs.existsSync(certDir)) fs.mkdirSync(certDir);
+
+  const fileName = `certificate-${certificateId}.pdf`;
+  const filePath = path.join(certDir, fileName);
+  fs.writeFileSync(filePath, pdfBuffer);
+
+  // Insert certificate record
+  await db.createCertificateRecord({ certificateId, reference, fileName });
+
+  // send email
+  const transporter = nodemailer.createTransport({
+    host: process.env.EMAIL_SMTP_HOST,
+    port: Number(process.env.EMAIL_SMTP_PORT || 587),
+    secure: false,
+    auth: {
+      user: process.env.EMAIL_SMTP_USER,
+      pass: process.env.EMAIL_SMTP_PASS
+    }
+  });
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM || 'no-reply@cyberlearn.academy',
+    to: purchase.email,
+    subject: `Your CyberLearn certificate for ${purchase.lessonId}`,
+    text: `Congratulations! Your certificate for ${purchase.lessonId} has been issued.`,
+    attachments: [{ filename: fileName, content: pdfBuffer }]
+  });
+
+  return { certificateId, fileName, filePath };
 }
 
-a { color: inherit; text-decoration: none; }
-img { max-width: 100%; }
-button, input {
-  font: inherit;
-}
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 18px 8vw;
-  background: rgba(8,16,21,0.72);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--line);
-}
+app.get('/verify', (req, res) => {
+  res.sendFile(path.join(__dirname, 'verify.html'));
+});
 
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
+app.post('/api/initiate-payment', async (req, res) => {
+  const { lessonId, email, amount } = req.body || {};
 
-.shield {
-  color: var(--mint);
-  font-size: 1.2rem;
-}
-
-nav {
-  display: flex;
-  gap: 22px;
-  color: var(--muted);
-  flex-wrap: wrap;
-}
-
-nav a:hover { color: var(--text); }
-
-main {
-  width: min(1200px, calc(100% - 32px));
-  margin: 0 auto;
-}
-
-.hero {
-  padding: 74px 0 30px;
-  display: grid;
-  gap: 24px;
-}
-
-.eyebrow {
-  color: var(--mint);
-  font-size: 0.82rem;
-  letter-spacing: 0.18em;
-  font-weight: 700;
-}
-
-h1 {
-  margin: 0;
-  font-size: clamp(2.7rem, 6vw, 5rem);
-  line-height: 1.04;
-  letter-spacing: -0.06em;
-}
-
-h1 span { color: var(--cyan); }
-
-.hero p {
-  max-width: 700px;
-  color: var(--muted);
-  font-size: 1.05rem;
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  padding: 0.9rem 1.2rem;
-  font-weight: 700;
-  transition: 0.2s ease;
-  cursor: pointer;
-}
-
-.btn.primary,
-.buy-lesson,
-.answer {
-  background: linear-gradient(135deg, var(--mint), var(--cyan));
-  color: #05221c;
-  border-color: transparent;
-}
-
-.btn.secondary {
-  background: rgba(255,255,255,0.02);
-  border-color: var(--line);
-  color: var(--text);
-}
-
-.hero-note {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--muted);
-}
-
-.dot {
-  width: 10px;
-  height: 10px;
-  background: var(--mint);
-  border-radius: 50%;
-  box-shadow: 0 0 18px rgba(98,240,193,0.9);
-}
-
-.stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(160px, 1fr));
-  gap: 18px;
-  margin: 22px 0 36px;
-}
-
-.stats > div {
-  background: linear-gradient(180deg, rgba(17,28,35,0.9), rgba(10,18,22,0.9));
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 22px 18px;
-  box-shadow: var(--shadow);
-}
-
-.stats strong {
-  display: block;
-  font-size: clamp(1.7rem, 3vw, 2.5rem);
-  margin-bottom: 3px;
-}
-
-.stats span {
-  color: var(--muted);
-}
-
-.section {
-  padding: 42px 0;
-}
-
-.section-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: end;
-  margin-bottom: 24px;
-}
-
-h2 {
-  margin: 0;
-  font-size: clamp(2rem, 4vw, 2.8rem);
-  letter-spacing: -0.05em;
-}
-
-#search {
-  width: min(260px, 100%);
-  padding: 12px 14px;
-  background: rgba(255,255,255,0.02);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  color: var(--text);
-}
-
-.filters {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin: 20px 0 16px;
-}
-
-.filter {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid var(--line);
-  color: var(--muted);
-  border-radius: 999px;
-  padding: 9px 14px;
-  cursor: pointer;
-}
-
-.filter.active {
-  background: rgba(98,240,193,0.12);
-  border-color: rgba(98,240,193,0.42);
-  color: var(--text);
-}
-
-.course-note {
-  color: var(--muted);
-  margin: 10px 0 22px;
-}
-
-.course-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 18px;
-}
-
-.course-card {
-  background: linear-gradient(180deg, var(--panel), var(--panel-strong));
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 20px;
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.course-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.course-icon {
-  width: 52px;
-  height: 52px;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  background: rgba(103,216,235,0.08);
-  border: 1px solid rgba(103,216,235,0.25);
-  font-size: 1.6rem;
-}
-
-.course-level {
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.04);
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.course-card h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  letter-spacing: -0.04em;
-}
-
-.course-card p {
-  margin: 0;
-  color: var(--muted);
-}
-
-.course-meta {
-  margin-top: auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  color: var(--muted);
-}
-
-.buy-lesson {
-  border: none;
-  border-radius: 12px;
-  padding: 0.9rem 1rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.split {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
-  align-items: center;
-}
-
-.lab-card {
-  background: linear-gradient(180deg, rgba(17,28,35,0.9), rgba(15,23,28,0.9));
-  border: 1px solid var(--line);
-  padding: 22px 18px;
-  border-radius: 18px;
-  box-shadow: var(--shadow);
-}
-
-.lab-icon {
-  font-size: 2rem;
-  color: var(--mint);
-}
-
-.lab-card ul {
-  margin: 12px 0 0;
-  padding-left: 18px;
-  color: var(--muted);
-}
-
-.quiz-card {
-  background: linear-gradient(180deg, rgba(17,28,35,0.9), rgba(12,20,25,0.9));
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: var(--shadow);
-}
-
-.quiz-count {
-  color: var(--mint);
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  margin-bottom: 12px;
-}
-
-#question {
-  margin: 0 0 18px;
-}
-
-.answers {
-  display: grid;
-  gap: 12px;
-}
-
-.answer {
-  text-align: left;
-  border: 1px solid rgba(0,0,0,0.12);
-  border-radius: 12px;
-  padding: 0.9rem 1rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.answer.correct {
-  background: #083f2c;
-  color: #dffef6;
-  border-color: rgba(98,240,193,0.5);
-}
-
-.answer.wrong {
-  background: #3d1717;
-  color: #ffe8e8;
-  border-color: rgba(255,120,120,0.5);
-}
-
-.answer:disabled {
-  opacity: 0.95;
-  cursor: not-allowed;
-}
-
-#feedback {
-  min-height: 24px;
-  color: var(--muted);
-  margin: 16px 0 0;
-}
-
-.roadmap {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-  margin-top: 24px;
-}
-
-.roadmap > div {
-  background: linear-gradient(180deg, rgba(17,28,35,0.9), rgba(18,25,30,0.9));
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 22px 18px;
-}
-
-.roadmap span {
-  color: var(--mint);
-  font-size: 2rem;
-  display: inline-block;
-  font-weight: 700;
-}
-
-.roadmap h3 {
-  margin: 14px 0 10px;
-}
-
-.roadmap p {
-  margin: 0;
-  color: var(--muted);
-}
-
-.cta {
-  margin: 18px 0 52px;
-  display: flex;
-  justify-content: space-between;
-  gap: 22px;
-  align-items: center;
-  background: linear-gradient(180deg, rgba(16,25,31,0.9), rgba(11,18,24,0.9));
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  padding: 28px;
-}
-
-footer {
-  width: min(1200px, calc(100% - 32px));
-  margin: 0 auto 30px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  color: var(--muted);
-  flex-wrap: wrap;
-}
-
-@media (max-width: 860px) {
-  .split, .roadmap, .stats, .cta {
-    grid-template-columns: 1fr;
-    display: grid;
+  if (!lessonId || !email || !amount) {
+    return res.status(400).json({ error: 'Missing lessonId, email, or amount.' });
   }
 
-  .section-head {
-    flex-direction: column;
-    align-items: flex-start;
+  try {
+    const response = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email,
+        amount: Number(amount),
+        callback_url: `${SITE_URL}/payment-callback`,
+        metadata: { lessonId }
+      })
+    });
+
+    const json = await response.json();
+    if (!json.status) {
+      return res.status(400).json({ error: json.message || 'Paystack initialization failed.' });
+    }
+
+    const reference = json.data.reference;
+    // Persist purchase
+    await db.savePurchase({ reference, lessonId, email, amount: Number(amount) });
+
+    res.json({ authorization_url: json.data.authorization_url, reference });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to initialize payment.', details: error.message });
+  }
+});
+
+app.get('/payment-callback', (req, res) => {
+  const reference = req.query.reference;
+  if (!reference) {
+    return res.status(400).send('Missing reference.');
   }
 
-  .topbar {
-    padding: 18px 20px;
+  res.send(`
+    <html>
+      <body style="font-family:Arial,sans-serif;background:#081015;color:#edf7fb;padding:40px;">
+        <h2>Payment status</h2>
+        <p>Processing your purchase...</p>
+        <script>
+          fetch('/api/verify/' + encodeURIComponent('${reference}'))
+            .then(r => r.json())
+            .then(data => {
+              if (data.ok) {
+                document.body.innerHTML = '<h2>Payment successful</h2><p>Your certificate is being emailed to you.</p><a href="/" style="color:#62f0c1;">Return to courses</a>';
+              } else {
+                document.body.innerHTML = '<h2>Payment not completed</h2><p>Please try again or contact support.</p>';
+              }
+            })
+            .catch(() => {
+              document.body.innerHTML = '<h2>Could not verify payment</h2><p>Please check your email or contact support.</p>';
+            });
+        </script>
+      </body>
+    </html>
+  `);
+});
+
+app.get('/api/verify/:reference', async (req, res) => {
+  const { reference } = req.params;
+
+  if (!reference) {
+    return res.status(400).json({ ok: false, error: 'Missing reference.' });
   }
 
-  nav {
-    gap: 12px;
-    font-size: 0.9rem;
-  }
-}
+  try {
+    const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` }
+    });
 
-@media (max-width: 520px) {
-  .topbar {
-    flex-direction: column;
-    align-items: flex-start;
+    const json = await response.json();
+    if (!json.status) {
+      return res.status(400).json({ ok: false, error: json.message || 'Verification failed.' });
+    }
+
+    const data = json.data;
+    if (data.status === 'success') {
+      await db.markPurchasePaid(reference, data);
+
+      // generate certificate if not present
+      try {
+        const cert = await generateCertificate(reference);
+        return res.json({ ok: true, message: 'Payment verified.', certificateUrl: `${SITE_URL}/certificates/${cert.fileName}`, certificateId: cert.certificateId });
+      } catch (genErr) {
+        // certificate generation may be async
+        console.error('Certificate generation error:', genErr);
+        return res.json({ ok: true, message: 'Payment verified. Certificate generation pending.' });
+      }
+    }
+
+    return res.json({ ok: false, message: 'Payment not successful.', status: data.status });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: 'Verification failed.', details: error.message });
+  }
+});
+
+app.post('/api/paystack-webhook', bodyParser.raw({ type: '*/*' }), async (req, res) => {
+  const signature = req.headers['x-paystack-signature'];
+  const hash = crypto.createHmac('sha512', PAYSTACK_SECRET_KEY).update(req.body).digest('hex');
+
+  if (signature !== hash) {
+    return res.status(400).send('Invalid signature');
   }
 
-  .hero {
-    padding-top: 46px;
-  }
-}
+  try {
+    const event = JSON.parse(req.body.toString());
+    const eventType = event.event;
+    const data = event.data || {};
 
+    if (eventType === 'charge.success' || eventType === 'transaction.success') {
+      const reference = data.reference;
+      await db.savePurchase({ reference, lessonId: data.metadata?.lessonId, email: data.customer?.email || data.customer?.email, amount: data.amount });
+      await db.markPurchasePaid(reference, data);
+      // fire and forget certificate generation
+      generateCertificate(reference).catch(err => console.error('generateCertificate err', err));
+    }
+  } catch (error) {
+    console.error('Webhook processing failed:', error);
+    return res.status(500).send('Webhook error');
+  }
+
+  res.sendStatus(200);
+});
+
+app.get('/api/certificate/:certificateId', async (req, res) => {
+  const certificateId = req.params.certificateId;
+  if (!certificateId) return res.status(400).json({ ok: false, error: 'Missing certificateId' });
+
+  try {
+    const row = await db.getCertificateById(certificateId);
+    if (!row) return res.status(404).json({ ok: false, error: 'Certificate not found' });
+    const url = `${SITE_URL}/certificates/${row.file_name}`;
+    res.json({ ok: true, certificate: { certificateId: row.certificate_id, lessonId: row.lessonId, email: row.email, file: url, issued_at: row.issued_at } });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+app.use('/certificates', express.static(path.join(__dirname, 'certificates')));
+
+const staticFiles = express.static(path.join(__dirname));
+app.use(staticFiles); // serve index.html, verify.html, assets
+
+app.listen(PORT, () => {
+  console.log(`CyberLearn Academy server running on http://localhost:${PORT}`);
+});

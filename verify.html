@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Verify Certificate — CyberLearn Academy</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#081015; color:#edf7fb; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+    .card { background:#0f1920; padding:28px; border-radius:12px; width: min(560px, 92%); border:1px solid rgba(255,255,255,0.04); }
+    input { width:100%; padding:12px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); margin-bottom:12px; background:transparent; color:inherit; }
+    button { padding:10px 14px; border-radius:8px; border:none; background:linear-gradient(135deg,#62f0c1,#67d8eb); color:#05221c; font-weight:700; cursor:pointer; }
+    .result { margin-top:14px; color:#a9bac4; }
+    a { color:#62f0c1; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Verify your certificate</h2>
+    <p>Enter the Certificate ID found on the PDF to verify authenticity.</p>
+    <input id="cid" placeholder="Certificate ID (e.g. 3f2a...)">
+    <div style="display:flex;gap:8px"><button id="check">Verify</button><a href="/" style="align-self:center">Back to courses</a></div>
+    <div id="result" class="result"></div>
+  </div>
+  <script>
+    document.getElementById('check').addEventListener('click', async () => {
+      const cid = document.getElementById('cid').value.trim();
+      const resEl = document.getElementById('result');
+      resEl.textContent = '';
+      if (!cid) { resEl.textContent = 'Please enter a certificate ID.'; return; }
+      try {
+        const r = await fetch('/api/certificate/' + encodeURIComponent(cid);
+        const j = await r.json();
+        if (!j.ok) { resEl.textContent = j.error || 'Not found'; return; }
+        const cert = j.certificate;
+        resEl.innerHTML = `Certificate for <strong>${cert.email}</strong> — Lesson: <strong>${cert.lessonId}</strong><br>Issued: ${cert.issued_at} <br><a href="${cert.file}" target="_blank">Download PDF</a>`;
+      } catch (err) {
+        resEl.textContent = 'Verification failed. Try again later.';
+      }
+    });
+  </script>
+</body>
+</html>
