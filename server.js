@@ -15,10 +15,28 @@ const PORT = process.env.PORT || 3000;
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const SITE_URL = process.env.SITE_URL || 'http://localhost:3000';
 
+// Admin credentials (basic auth)
+const ADMIN_USER = process.env.ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASS || 'password';
+
 // Ensure DB exists and tables are created
 db.init();
 
 app.use(express.json());
+
+function basicAuth(req, res, next) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Basic ')) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Admin Area"');
+    return res.status(401).send('Authentication required.');
+  }
+  const creds = Buffer.from(auth.split(' ')[1], 'base64').toString().split(':');
+  const user = creds[0] || '';
+  const pass = creds[1] || '';
+  if (user === ADMIN_USER && pass === ADMIN_PASS) return next();
+  res.setHeader('WWW-Authenticate', 'Basic realm="Admin Area"');
+  return res.status(401).send('Invalid credentials.');
+}
 
 function makeCertificateHtml({ certificateId, email, lessonId }) {
   const issued = new Date().toLocaleDateString();
@@ -52,10 +70,9 @@ function makeCertificateHtml({ certificateId, email, lessonId }) {
   `;
 }
 
-async function generateCertificate(reference) {
+async function generateCertificateForReference(reference) {
   const purchase = await db.getPurchaseByReference(reference);
   if (!purchase) throw new Error('Purchase record not found');
-  if (purchase.certificate_issued) return; // legacy check
 
   const certificateId = uuidv4();
   const html = makeCertificateHtml({ certificateId, email: purchase.email, lessonId: purchase.lessonId });
@@ -73,38 +90,35 @@ async function generateCertificate(reference) {
   const filePath = path.join(certDir, fileName);
   fs.writeFileSync(filePath, pdfBuffer);
 
-  // Insert certificate record
   await db.createCertificateRecord({ certificateId, reference, fileName });
 
-  // send email
-  const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_SMTP_HOST,
-    port: Number(process.env.EMAIL_SMTP_PORT || 587),
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_SMTP_USER,
-      pass: process.env.EMAIL_SMTP_PASS
-    }
-  });
+  // send email (best-effort)
+  try {
+    const transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_SMTP_HOST,
+      port: Number(process.env.EMAIL_SMTP_PORT || 587),
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_SMTP_USER,
+        pass: process.env.EMAIL_SMTP_PASS
+      }
+    });
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM || 'no-reply@cyberlearn.academy',
-    to: purchase.email,
-    subject: `Your CyberLearn certificate for ${purchase.lessonId}`,
-    text: `Congratulations! Your certificate for ${purchase.lessonId} has been issued.`,
-    attachments: [{ filename: fileName, content: pdfBuffer }]
-  });
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || 'no-reply@cyberlearn.academy',
+      to: purchase.email,
+      subject: `Your CyberLearn certificate for ${purchase.lessonId}`,
+      text: `Congratulations! Your certificate for ${purchase.lessonId} has been issued.`,
+      attachments: [{ filename: fileName, content: pdfBuffer }]
+    });
+  } catch (err) {
+    console.error('Email send failed:', err.message || err);
+  }
 
   return { certificateId, fileName, filePath };
 }
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.get('/verify', (req, res) => {
-  res.sendFile(path.join(__dirname, 'verify.html'));
-});
+// --- Existing endpoints (initiate, verify, webhook) ---
 
 app.post('/api/initiate-payment', async (req, res) => {
   const { lessonId, email, amount } = req.body || {};
@@ -197,10 +211,9 @@ app.get('/api/verify/:reference', async (req, res) => {
 
       // generate certificate if not present
       try {
-        const cert = await generateCertificate(reference);
+        const cert = await generateCertificateForReference(reference);
         return res.json({ ok: true, message: 'Payment verified.', certificateUrl: `${SITE_URL}/certificates/${cert.fileName}`, certificateId: cert.certificateId });
       } catch (genErr) {
-        // certificate generation may be async
         console.error('Certificate generation error:', genErr);
         return res.json({ ok: true, message: 'Payment verified. Certificate generation pending.' });
       }
@@ -230,7 +243,7 @@ app.post('/api/paystack-webhook', bodyParser.raw({ type: '*/*' }), async (req, r
       await db.savePurchase({ reference, lessonId: data.metadata?.lessonId, email: data.customer?.email || data.customer?.email, amount: data.amount });
       await db.markPurchasePaid(reference, data);
       // fire and forget certificate generation
-      generateCertificate(reference).catch(err => console.error('generateCertificate err', err));
+      generateCertificateForReference(reference).catch(err => console.error('generateCertificate err', err));
     }
   } catch (error) {
     console.error('Webhook processing failed:', error);
@@ -240,6 +253,72 @@ app.post('/api/paystack-webhook', bodyParser.raw({ type: '*/*' }), async (req, r
   res.sendStatus(200);
 });
 
+// --- ADMIN endpoints (protected by Basic Auth) ---
+
+app.get('/admin', basicAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+app.get('/api/admin/purchases', basicAuth, async (req, res) => {
+  const page = Number(req.query.page || 1);
+  const pageSize = Number(req.query.pageSize || 25);
+  const q = (req.query.q || '').trim();
+  const status = req.query.status || '';
+
+  // Build SQL
+  let base = `SELECT p.reference, p.lessonId, p.email, p.amount, p.status, p.created_at, c.file_name FROM purchases p LEFT JOIN certificates c ON c.reference = p.reference`;
+  const params = [];
+  const filters = [];
+  if (q) {
+    filters.push(`(p.email LIKE ? OR p.lessonId LIKE ? OR p.reference LIKE ?)`);
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+  }
+  if (status) {
+    filters.push(`p.status = ?`);
+    params.push(status);
+  }
+  if (filters.length) base += ' WHERE ' + filters.join(' AND ');
+  base += ' ORDER BY p.created_at DESC LIMIT ? OFFSET ?';
+  params.push(pageSize, (page-1)*pageSize);
+
+  try {
+    db.db.serialize(() => {
+      db.db.all(base, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        // get total count for info
+        let countSql = 'SELECT COUNT(*) as cnt FROM purchases p';
+        const countParams = [];
+        if (q || status) {
+          const countFilters = [];
+          if (q) countFilters.push(`(p.email LIKE ? OR p.lessonId LIKE ? OR p.reference LIKE ?)`), countParams.push(`%${q}%`, `%${q}%`, `%${q}%`);
+          if (status) countFilters.push(`p.status = ?`), countParams.push(status);
+          countSql += ' WHERE ' + countFilters.join(' AND ');
+        }
+        db.db.get(countSql, countParams, (err2, cntRow) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          res.json({ rows, total: cntRow.cnt });
+        });
+      });
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/reissue', basicAuth, async (req, res) => {
+  const { reference } = req.body || {};
+  if (!reference) return res.status(400).json({ ok: false, error: 'Missing reference' });
+
+  try {
+    const cert = await generateCertificateForReference(reference);
+    res.json({ ok: true, certificateId: cert.certificateId, url: `${SITE_URL}/certificates/${cert.fileName}` });
+  } catch (err) {
+    console.error('Reissue error', err);
+    res.status(500).json({ ok: false, error: err.message || 'Failed to reissue' });
+  }
+});
+
+// Certificate lookup endpoint
 app.get('/api/certificate/:certificateId', async (req, res) => {
   const certificateId = req.params.certificateId;
   if (!certificateId) return res.status(400).json({ ok: false, error: 'Missing certificateId' });

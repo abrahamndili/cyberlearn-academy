@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin — CyberLearn Academy</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#081015; color:#edf7fb; margin:0; padding:20px; }
+    .wrap { max-width:1100px; margin:0 auto; }
+    h1 { margin:0 0 14px; }
+    .controls { display:flex; gap:8px; margin-bottom:12px; }
+    input[type="search"] { padding:8px 10px; border-radius:6px; border:1px solid rgba(255,255,255,0.05); background:transparent; color:inherit; }
+    button { padding:8px 10px; border-radius:6px; border:none; background:linear-gradient(135deg,#62f0c1,#67d8eb); color:#05221c; font-weight:700; cursor:pointer; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { text-align:left; padding:10px; border-bottom:1px solid rgba(255,255,255,0.03); font-size:0.95rem; }
+    th { color:#a9bac4; font-weight:700; }
+    tr:hover td { background: rgba(255,255,255,0.01); }
+    .small { color:#a9bac4; font-size:0.9rem; }
+    .actions button { margin-right:6px; }
+    .pager { margin-top:10px; display:flex; gap:8px; align-items:center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Admin — Purchases</h1>
+    <p class="small">Protected by HTTP Basic auth. Use your ADMIN_USER and ADMIN_PASS environment variables.</p>
+
+    <div class="controls">
+      <input id="q" placeholder="Search by email, lessonId or reference" />
+      <select id="status">
+        <option value="">All statuses</option>
+        <option value="pending">pending</option>
+        <option value="paid">paid</option>
+      </select>
+      <button id="search">Search</button>
+      <button id="refresh">Refresh</button>
+    </div>
+
+    <div id="results"></div>
+    <div class="pager">
+      <button id="prev">Prev</button>
+      <div id="pageInfo" class="small"></div>
+      <button id="next">Next</button>
+    </div>
+  </div>
+
+  <script>
+    let page = 1, pageSize = 25;
+    async function load() {
+      const q = document.getElementById('q').value.trim();
+      const status = document.getElementById('status').value;
+      const res = await fetch(`/api/admin/purchases?page=${page}&pageSize=${pageSize}&q=${encodeURIComponent(q)}&status=${encodeURIComponent(status)}`);
+      if (res.status === 401) { document.body.innerHTML = '<h2>Unauthorized</h2><p>Please sign in using your browser HTTP Basic auth prompt.</p>'; return; }
+      const json = await res.json();
+      render(json);
+    }
+
+    function render(data) {
+      const out = document.getElementById('results');
+      const rows = data.rows || [];
+      if (rows.length === 0) {
+        out.innerHTML = '<p class="small">No purchases found.</p>';
+        document.getElementById('pageInfo').textContent = `Page ${page}`;
+        return;
+      }
+      const html = ['<table><thead><tr><th>Reference</th><th>Lesson</th><th>Email</th><th>Amount</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>'];
+      rows.forEach(r => {
+        const amt = (r.amount/100).toFixed(0);
+        html.push(`<tr><td class="small">${r.reference}</td><td>${r.lessonId}</td><td>${r.email}</td><td>₦${amt}</td><td>${r.status}</td><td class="small">${r.created_at}</td><td class="actions"><button data-ref="${r.reference}" class="reissue">Re-issue</button>${r.file_name?`<a href="/certificates/${r.file_name}" target="_blank"><button>Download</button></a>`:''}</td></tr>`);
+      });
+      html.push('</tbody></table>');
+      out.innerHTML = html.join('');
+
+      document.querySelectorAll('.reissue').forEach(btn => btn.addEventListener('click', async (e) => {
+        const ref = e.currentTarget.dataset.ref;
+        if (!confirm('Re-issue certificate for ' + ref + '?')) return;
+        e.currentTarget.disabled = true;
+        const r = await fetch('/api/admin/reissue', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ reference: ref }) });
+        const j = await r.json();
+        if (j.ok) alert('Certificate re-issued: ' + j.certificateId + '\n' + (j.url || '')); else alert('Failed: ' + (j.error || 'unknown'));
+        load();
+      }));
+
+      document.getElementById('pageInfo').textContent = `Page ${page} — ${data.total || rows.length} results`;
+    }
+
+    document.getElementById('search').addEventListener('click', () => { page = 1; load(); });
+    document.getElementById('refresh').addEventListener('click', () => load());
+    document.getElementById('prev').addEventListener('click', () => { if (page>1) { page--; load(); }});
+    document.getElementById('next').addEventListener('click', () => { page++; load(); });
+
+    // initial load
+    load();
+  </script>
+</body>
+</html>
