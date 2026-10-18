@@ -1,3 +1,138 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-:root{--bg:#080d12;--panel:#101820;--panel2:#121f28;--text:#edf5f7;--muted:#a2b4bc;--mint:#65f0c1;--cyan:#5bd8e8;--line:#243640}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;line-height:1.6}a{color:inherit;text-decoration:none}.topbar{height:74px;padding:0 max(5vw,20px);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #1a2930;position:sticky;top:0;background:#080d12ed;backdrop-filter:blur(14px);z-index:5}.brand{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;letter-spacing:-.5px}.brand b{color:var(--mint)}.shield{color:var(--mint);font-size:27px;margin-right:8px}nav{display:flex;gap:26px;color:#b9c8ce;font-size:14px}nav a:hover,.text-link{color:var(--mint)}main{max-width:1120px;margin:auto;padding:0 24px}.hero{padding:100px 0 66px;max-width:800px}.eyebrow{color:var(--mint);font-size:11px;font-weight:700;letter-spacing:2.4px}.hero h1{font:600 clamp(42px,7vw,74px)/1.08 'Space Grotesk',sans-serif;letter-spacing:-3px;margin:22px 0}.hero h1 span{color:var(--mint)}p{color:var(--muted)}.hero p{font-size:18px;max-width:640px}.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin:30px 0}.btn{display:inline-flex;align-items:center;justify-content:center;border-radius:9px;padding:12px 19px;font-weight:700;font-size:14px;border:1px solid var(--line);cursor:pointer}.primary{background:var(--mint);color:#062018;border-color:var(--mint)}.primary:hover{background:#8af7d4}.secondary{background:#111a20}.hero-note{font-size:12px;color:var(--muted)}.dot{display:inline-block;width:7px;height:7px;background:var(--mint);border-radius:50%;margin-right:8px}.stats{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--line);background:#0d151b;border-radius:14px;margin:0 0 80px}.stats div{padding:22px 28px;border-right:1px solid var(--line);display:flex;flex-direction:column}.stats div:last-child{border:0}.stats strong{font:600 30px 'Space Grotesk';color:var(--mint)}.stats span{color:var(--muted);font-size:13px}.section{padding:24px 0 76px;scroll-margin-top:90px}.section h2,.cta h2{font:600 clamp(29px,4vw,42px)/1.2 'Space Grotesk';letter-spacing:-1.4px;margin:10px 0 24px}.section-head{display:flex;align-items:end;justify-content:space-between;gap:20px;flex-wrap:wrap}.section-head h2{margin-bottom:20px}input[type=search]{background:#0f171d;border:1px solid var(--line);border-radius:9px;color:var(--text);padding:12px 14px;min-width:220px;font:inherit}.filters{display:flex;gap:8px;margin-bottom:22px}.filter{background:#111a20;border:1px solid var(--line);border-radius:20px;color:var(--muted);padding:7px 14px;cursor:pointer}.filter.active{background:#17382f;color:var(--mint);border-color:#285a4b}.course-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:15px}.course-card{background:linear-gradient(145deg,#121e26,#0d141a);border:1px solid var(--line);border-radius:13px;padding:20px;min-height:215px;display:flex;flex-direction:column;transition:transform .2s,border-color .2s}.course-card:hover{transform:translateY(-3px);border-color:#397561}.course-top{display:flex;justify-content:space-between;align-items:center}.course-icon{font-size:24px;background:#17342e;border-radius:9px;padding:8px}.level{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--cyan)}.course-card h3{font:600 19px 'Space Grotesk';margin:17px 0 5px}.course-card p{font-size:13px;margin:0 0 16px}.course-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:auto;color:var(--mint);font-size:12px}.split{display:grid;grid-template-columns:1fr 1fr;gap:70px;align-items:center;border-top:1px solid var(--line);padding-top:70px}.lab-card,.quiz-card{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:26px}.lab-icon{font-size:30px;color:var(--mint)}.lab-card h3{font:600 22px 'Space Grotesk'}.lab-card li{color:#b9c9cf;padding:6px 0}.quiz-section{text-align:center}.quiz-card{max-width:650px;margin:26px auto 0;text-align:left}.quiz-count{font-size:11px;color:var(--mint);letter-spacing:1.8px}.quiz-card h3{font:600 22px 'Space Grotesk';margin:14px 0}.answers{display:grid;gap:9px}.answer{background:#0b1217;border:1px solid var(--line);border-radius:8px;padding:12px;text-align:left;color:var(--text);cursor:pointer;font:inherit}.answer:hover{border-color:var(--mint)}.answer.selected{border-color:var(--cyan);background:#14312c}.answer.correct{border-color:var(--mint)}.answer.wrong{border-color:#f07e7e}#feedback{min-height:26px;font-size:13px}.quiz-card button:disabled{opacity:.45;cursor:not-allowed}.roadmap{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.roadmap>div{border-top:1px solid #3d6c5e;padding:20px 14px 0 0}.roadmap span{color:var(--mint);font:600 22px 'Space Grotesk'}.roadmap h3{font:600 17px 'Space Grotesk'}.roadmap p{font-size:13px}.cta{margin:10px 0 70px;border:1px solid #2a5147;background:linear-gradient(110deg,#11251f,#10191f);padding:30px;border-radius:15px;display:flex;align-items:center;justify-content:space-between;gap:24px}.cta h2{margin-bottom:5px}.cta p{margin-bottom:0}footer{border-top:1px solid var(--line);padding:32px 24px;text-align:center;color:var(--muted);font-size:13px}footer .brand{color:var(--text)}footer small{font-size:11px}@media(max-width:760px){nav{gap:12px;font-size:12px}.topbar{height:auto;min-height:68px;flex-wrap:wrap;padding-top:12px;padding-bottom:12px}.brand{font-size:17px}nav{width:100%;justify-content:space-between}.hero{padding:68px 0 45px}.hero h1{letter-spacing:-1.8px}.stats{margin-bottom:55px}.stats div{padding:15px 12px}.stats strong{font-size:24px}.course-grid{grid-template-columns:repeat(2,1fr)}.split{grid-template-columns:1fr;gap:25px;padding-top:45px}.roadmap{grid-template-columns:repeat(2,1fr)}.cta{align-items:flex-start;flex-direction:column}}@media(max-width:430px){main{padding:0 17px}.course-grid{grid-template-columns:1fr}.course-card{min-height:185px}.section-head input{width:100%}.stats span{font-size:11px}.roadmap{grid-template-columns:1fr 1fr}.hero p{font-size:16px}}
+const courses = [
+  { title: 'Cybersecurity Fundamentals', level: 'Beginner', icon: '🛡️', desc: 'CIA triad, threats, vulnerabilities, risk and security controls.', time: '2–3 hours', lessonId: 'cyber-fundamentals', price: 5000 },
+  { title: 'Linux & Networking', level: 'Beginner', icon: '⌘', desc: 'Terminal basics, IP addresses, DNS, ports and network protocols.', time: '3–4 hours', lessonId: 'linux-networking', price: 5000 },
+  { title: 'Python for Security', level: 'Beginner', icon: '🐍', desc: 'Learn variables, files, scripts and small defensive tools.', time: '3–5 hours', lessonId: 'python-security', price: 5000 },
+  { title: 'Web & Application Security', level: 'Intermediate', icon: '⌁', desc: 'Understand authentication, input validation, XSS and SQL injection prevention.', time: '4–5 hours', lessonId: 'web-security', price: 7000 },
+  { title: 'Digital Forensics', level: 'Intermediate', icon: '🔎', desc: 'Evidence handling, file metadata, timelines and investigation notes.', time: '3–4 hours', lessonId: 'digital-forensics', price: 7000 },
+  { title: 'Incident Response', level: 'Intermediate', icon: '🚨', desc: 'Prepare, detect, contain, eradicate, recover and document incidents.', time: '2–3 hours', lessonId: 'incident-response', price: 7000 },
+  { title: 'Cloud Security', level: 'Intermediate', icon: '☁️', desc: 'Identity, access control, secure storage and cloud configuration basics.', time: '3 hours', lessonId: 'cloud-security', price: 7000 },
+  { title: 'Threat Intelligence', level: 'Intermediate', icon: '◎', desc: 'Indicators of compromise, threat context and reliable reporting.', time: '2–3 hours', lessonId: 'threat-intelligence', price: 7000 },
+  { title: 'Security Operations (SOC)', level: 'Intermediate', icon: '▦', desc: 'Logs, alert triage, SIEM concepts and escalation workflows.', time: '4 hours', lessonId: 'soc', price: 8000 },
+  { title: 'Technical Writing', level: 'Beginner', icon: '✎', desc: 'Write clear lab reports, findings, recommendations and incident summaries.', time: '1–2 hours', lessonId: 'technical-writing', price: 5000 }
+];
+
+let activeLevel = 'All';
+const grid = document.querySelector('#courseGrid');
+
+function renderCourses() {
+  const q = document.querySelector('#search').value.toLowerCase();
+  const list = courses.filter(course => {
+    const matchesLevel = activeLevel === 'All' || course.level === activeLevel;
+    const haystack = `${course.title} ${course.desc}`.toLowerCase();
+    return matchesLevel && haystack.includes(q);
+  });
+
+  grid.innerHTML = list.map(course => `
+    <article class="course-card">
+      <div class="course-top">
+        <div class="course-icon">${course.icon}</div>
+        <span class="course-level">${course.level}</span>
+      </div>
+      <h3>${course.title}</h3>
+      <p>${course.desc}</p>
+      <div class="course-meta">
+        <span>${course.time}</span>
+        <strong>₦${(course.price / 100).toFixed(0)}</strong>
+      </div>
+      <button class="buy-lesson" data-lesson-id="${course.lessonId}" data-amount="${course.price}">Buy lesson</button>
+    </article>
+  `).join('');
+}
+
+document.querySelector('#search').addEventListener('input', renderCourses);
+document.querySelectorAll('.filter').forEach(button => {
+  button.addEventListener('click', () => {
+    document.querySelectorAll('.filter').forEach(item => item.classList.remove('active'));
+    button.classList.add('active');
+    activeLevel = button.dataset.level;
+    renderCourses();
+  });
+});
+
+async function startPayment(lessonId, amount) {
+  const email = prompt('Enter your email to receive the lesson certificate after payment:');
+  if (!email) return;
+
+  try {
+    const response = await fetch('/api/initiate-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lessonId, email, amount })
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.authorization_url) {
+      throw new Error(data.error || 'Payment could not be initialized.');
+    }
+
+    window.location.href = data.authorization_url;
+  } catch (error) {
+    alert(error.message || 'Payment failed.');
+  }
+}
+
+document.addEventListener('click', event => {
+  const target = event.target.closest('.buy-lesson');
+  if (!target) return;
+
+  const lessonId = target.dataset.lessonId;
+  const amount = Number(target.dataset.amount || 0);
+  startPayment(lessonId, amount);
+});
+
+const quiz = [
+  { q: 'What does the CIA triad stand for?', a: ['Confidentiality, Integrity, Availability', 'Control, Inspection, Access', 'Cybersecurity, Internet, Applications'], correct: 0, why: 'The CIA triad is a core model for information security.' },
+  { q: 'Which command commonly shows the current directory in Linux?', a: ['whereami', 'pwd', 'showdir'], correct: 1, why: 'pwd prints the current working directory.' },
+  { q: 'What should you do before testing a system?', a: ['Get explicit authorization', 'Hide your identity', 'Disable its logs'], correct: 0, why: 'Only test systems you own or have clear permission to assess.' },
+  { q: 'What is phishing?', a: ['A way to compress files', 'A social-engineering attempt to trick people', 'A network cable type'], correct: 1, why: 'Phishing uses deceptive messages or sites to steal information.' },
+  { q: 'What is the safest way to store passwords?', a: ['Plain text in a file', 'Reuse one easy password', 'Use a password manager and unique passwords'], correct: 2, why: 'A password manager helps create and store unique passwords safely.' }
+];
+
+let qi = 0, score = 0, chosen = false;
+
+function showQuestion() {
+  chosen = false;
+  document.querySelector('#feedback').textContent = '';
+  document.querySelector('#next').disabled = true;
+  const item = quiz[qi];
+  document.querySelector('#quizCount').textContent = `QUESTION ${qi + 1} OF ${quiz.length}`;
+  document.querySelector('#question').textContent = item.q;
+  const answers = document.querySelector('#answers');
+  answers.innerHTML = '';
+  item.a.forEach((answer, index) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'answer';
+    btn.textContent = answer;
+    btn.addEventListener('click', () => {
+      if (chosen) return;
+      chosen = true;
+      const isCorrect = index === item.correct;
+      document.querySelectorAll('.answer').forEach(x => x.disabled = true);
+      btn.classList.add(isCorrect ? 'correct' : 'wrong');
+      document.querySelector('#feedback').textContent = isCorrect ? `Correct — ${item.why}` : `Not quite. ${item.why}`;
+      if (isCorrect) score++;
+      document.querySelector('#next').disabled = false;
+    });
+    answers.appendChild(btn);
+  });
+}
+
+document.querySelector('#next').addEventListener('click', () => {
+  if (!chosen) return;
+  if (qi < quiz.length - 1) {
+    qi++;
+    showQuestion();
+  } else {
+    document.querySelector('#quizCount').textContent = 'QUIZ COMPLETE';
+    document.querySelector('#question').textContent = `You scored ${score} out of ${quiz.length}.`;
+    document.querySelector('#answers').innerHTML = '';
+    document.querySelector('#feedback').textContent = 'Nice work. Review the lessons and keep learning.';
+    document.querySelector('#next').disabled = true;
+  }
+});
+
+document.querySelector('#year').textContent = new Date().getFullYear();
+renderCourses();
+showQuestion();
+

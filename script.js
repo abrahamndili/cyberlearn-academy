@@ -1,28 +1,49 @@
-const courses=[
-{title:"Cybersecurity Fundamentals",level:"Beginner",icon:"🛡️",desc:"CIA triad, threats, vulnerabilities, risk and security controls.",time:"2–3 hours"},
-{title:"Linux & Networking",level:"Beginner",icon:"⌘",desc:"Terminal basics, IP addresses, DNS, ports and network protocols.",time:"3–4 hours"},
-{title:"Python for Security",level:"Beginner",icon:"🐍",desc:"Learn variables, files, scripts and small defensive tools.",time:"3–5 hours"},
-{title:"Web & Application Security",level:"Intermediate",icon:"⌁",desc:"Understand authentication, input validation, XSS and SQL injection prevention.",time:"4–5 hours"},
-{title:"Digital Forensics",level:"Intermediate",icon:"🔎",desc:"Evidence handling, file metadata, timelines and investigation notes.",time:"3–4 hours"},
-{title:"Incident Response",level:"Intermediate",icon:"🚨",desc:"Prepare, detect, contain, eradicate, recover and document incidents.",time:"2–3 hours"},
-{title:"Cloud Security",level:"Intermediate",icon:"☁️",desc:"Identity, access control, secure storage and cloud configuration basics.",time:"3 hours"},
-{title:"Threat Intelligence",level:"Intermediate",icon:"◎",desc:"Indicators of compromise, threat context and reliable reporting.",time:"2–3 hours"},
-{title:"Security Operations (SOC)",level:"Intermediate",icon:"▦",desc:"Logs, alert triage, SIEM concepts and escalation workflows.",time:"4 hours"},
-{title:"Technical Writing",level:"Beginner",icon:"✎",desc:"Write clear lab reports, findings, recommendations and incident summaries.",time:"1–2 hours"}
-];
-let activeLevel="All";
-const grid=document.querySelector("#courseGrid");
-function renderCourses(){const q=document.querySelector("#search").value.toLowerCase();const list=courses.filter(c=>(activeLevel==="All"||c.level===activeLevel)&&(c.title+" "+c.desc).toLowerCase().includes(q));grid.innerHTML=list.map(c=>`<article class="course-card"><div class="course-top"><span class="course-icon">${c.icon}</span><span class="level">${c.level}</span></div><h3>${c.title}</h3><p>${c.desc}</p><div class="course-bottom"><span>Preview module ↗</span><span>${c.time}</span></div></article>`).join("")||"<p>No courses match your search.</p>";}
-document.querySelector("#search").addEventListener("input",renderCourses);
-document.querySelectorAll(".filter").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll(".filter").forEach(x=>x.classList.remove("active"));b.classList.add("active");activeLevel=b.dataset.level;renderCourses()}));
-const quiz=[
-{q:"What does the CIA triad stand for?",a:["Confidentiality, Integrity, Availability","Control, Inspection, Access","Cybersecurity, Internet, Applications"],correct:0,why:"The CIA triad is a core security model: confidentiality, integrity and availability."},
-{q:"Which command commonly shows the current directory in Linux?",a:["whereami","pwd","showdir"],correct:1,why:"pwd prints the current working directory."},
-{q:"What should you do before testing a system?",a:["Get explicit authorization","Hide your identity","Disable its logs"],correct:0,why:"Only test systems you own or have clear permission to assess."},
-{q:"What is phishing?",a:["A way to compress files","A social-engineering attempt to trick people","A network cable type"],correct:1,why:"Phishing uses deceptive messages or sites to steal information or prompt unsafe actions."},
-{q:"What is the safest way to store passwords?",a:["Plain text in a file","Reuse one easy password","Use a password manager and unique passwords"],correct:2,why:"A password manager helps create and store strong, unique passwords."}
-];
-let qi=0,score=0,chosen=false;
-function showQuestion(){chosen=false;document.querySelector("#feedback").textContent="";document.querySelector("#next").disabled=true;document.querySelector("#next").textContent=qi===quiz.length-1?"See result →":"Next question →";document.querySelector("#quizCount").textContent=`QUESTION ${qi+1} OF ${quiz.length}`;document.querySelector("#question").textContent=quiz[qi].q;document.querySelector("#answers").innerHTML=quiz[qi].a.map((a,i)=>`<button class="answer" data-i="${i}">${String.fromCharCode(65+i)}. ${a}</button>`).join("");document.querySelectorAll(".answer").forEach(b=>b.addEventListener("click",()=>{if(chosen)return;chosen=true;const i=Number(b.dataset.i);if(i===quiz[qi].correct){score++;b.classList.add("correct");document.querySelector("#feedback").textContent="Correct! "+quiz[qi].why}else{b.classList.add("wrong");document.querySelector("#feedback").textContent="Not quite. "+quiz[qi].why;document.querySelectorAll(".answer")[quiz[qi].correct].classList.add("correct")}document.querySelector("#next").disabled=false;}));}
-document.querySelector("#next").addEventListener("click",()=>{if(!chosen)return;if(qi<quiz.length-1){qi++;showQuestion()}else{document.querySelector("#quizCount").textContent="QUIZ COMPLETE";document.querySelector("#question").textContent=`You scored ${score} out of ${quiz.length}.`;document.querySelector("#answers").innerHTML="";document.querySelector("#feedback").textContent=score>=4?"Great work — keep learning and practicing safely.":"Good start. Review the course cards and try again.";const b=document.querySelector("#next");b.textContent="Try again ↻";b.disabled=false;b.onclick=()=>{qi=0;score=0;b.onclick=null;showQuestion()}}});
-document.querySelector("#year").textContent=new Date().getFullYear();renderCourses();showQuestion();
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="CyberLearn Academy — practical cybersecurity learning, safe labs and revision quizzes.">
+<title>CyberLearn Academy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#"><span class="shield">⬡</span> CyberLearn <b>Academy</b></a>
+  <nav><a href="#courses">Courses</a><a href="#labs">Safe labs</a><a href="#quiz">Quiz</a><a href="#roadmap">Roadmap</a></nav>
+</header>
+<main>
+<section class="hero">
+  <div class="eyebrow">LEARN • PRACTICE • DEFEND</div>
+  <h1>Build your skills.<br><span>Defend the digital world.</span></h1>
+  <p>Practical cybersecurity learning for beginners and future security professionals. Learn the fundamentals, practice safely, and track your progress.</p>
+  <div class="hero-actions"><a class="btn primary" href="#courses">Explore courses ↘</a><a class="btn secondary" href="#roadmap">View learning roadmap</a></div>
+  <div class="hero-note"><span class="dot"></span> Beginner-friendly • Ethical learning • Mobile-ready</div>
+</section>
+<section class="stats">
+  <div><strong>10</strong><span>Learning modules</span></div><div><strong>4</strong><span>Skill levels</span></div><div><strong>100%</strong><span>Learn ethically</span></div>
+</section>
+<section id="courses" class="section">
+  <div class="section-head"><div><div class="eyebrow">YOUR LEARNING PATH</div><h2>Explore the courses</h2></div><input id="search" type="search" placeholder="Search courses…" aria-label="Search courses"></div>
+  <div class="filters"><button class="filter active" data-level="All">All levels</button><button class="filter" data-level="Beginner">Beginner</button><button class="filter" data-level="Intermediate">Intermediate</button></div>
+  <p class="course-note">Each course includes a lesson purchase flow and a certificate after successful payment.</p>
+  <div id="courseGrid" class="course-grid"></div>
+</section>
+<section id="labs" class="section split">
+  <div><div class="eyebrow">PRACTICE SAFELY</div><h2>Hands-on learning, the right way.</h2><p>Use isolated practice environments and systems you own or have explicit permission to test. Never scan or attack systems without authorization.</p></div>
+  <div class="lab-card"><div class="lab-icon">⌘</div><h3>Safe lab ideas</h3><ul><li>Practice Linux commands in a local terminal</li><li>Analyze sample logs and identify suspicious activity</li><li>Set up a virtual environment with controlled network access</li></ul></div>
+</section>
+<section id="quiz" class="section quiz-section">
+  <div class="eyebrow">CHECK YOUR KNOWLEDGE</div><h2>Quick revision quiz</h2>
+  <div class="quiz-card"><div id="quizCount" class="quiz-count">QUESTION 1 OF 5</div><h3 id="question">Loading quiz…</h3><div id="answers" class="answers"></div><p id="feedback" aria-live="polite"></p><button id="next" class="btn primary" disabled>Next</button></div>
+</section>
+<section id="roadmap" class="section">
+  <div class="eyebrow">START HERE</div><h2>Your learning roadmap</h2>
+  <div class="roadmap"><div><span>01</span><h3>Build foundations</h3><p>Computer basics, networking, Linux and security principles.</p></div><div><span>02</span><h3>Practice core skills</h3><p>Python, command line work, security analysis, and safe lab workflows.</p></div><div><span>03</span><h3>Earn recognition</h3><p>Complete lessons, pass the quiz, and receive a certificate after payment.</p></div></div>
+</section>
+<section class="cta"><div><div class="eyebrow">YOUR NEXT STEP</div><h2>Consistency builds confidence.</h2><p>Study one topic, practice in a safe lab, and write down what you learn.</p></div><a class="btn primary" href="#courses">Start a lesson</a></section>
+</main>
+<footer><a class="brand" href="#">⬡ CyberLearn <b>Academy</b></a><p>Learn cybersecurity ethically. Practice only where you have permission.</p><small>© <span id="year"></span> CyberLearn Academy</small></footer>
+<script src="script.js"></script>
+</body>
+</html>
